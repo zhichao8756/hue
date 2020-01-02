@@ -3665,9 +3665,6 @@ class Bundle(Job):
 
   @property
   def data(self):
-    if type(self._data['properties']['kickoff']) == str:
-      self._data['properties']['kickoff'] = parse(self._data['properties']['kickoff'])
-
     if self.document is not None:
       self._data['id'] = self.document.id
 
