@@ -17,58 +17,27 @@
 import $ from 'jquery';
 import * as ko from 'knockout';
 
-import componentUtils from './componentUtils';
+import componentUtils from '../componentUtils';
 import huePubSub from 'utils/huePubSub';
 import I18n from 'utils/i18n';
 import HueFileEntry from 'doc/hueFileEntry';
+import DisposableComponent from '../DisposableComponent';
+
+import './ko.linkSharing';
 
 export const SHOW_EVENT = 'doc.show.share.modal';
 export const SHOWN_EVENT = 'doc.share.modal.shown';
 
 // prettier-ignore
 const TEMPLATE = `
-  <!-- ko with: document -->
     <div class="modal-header">
       <button type="button" class="close" data-dismiss="modal" aria-label="${ I18n('Close') }"><span aria-hidden="true">&times;</span></button>
-      <h2 class="modal-title">${ I18n('Sharing') } - <span data-bind="text: definition().name"></span></h2>
+      <h2 class="modal-title">${ I18n('Sharing') } - <span data-bind="text: documentName"></span></h2>
     </div>
     <div class="modal-body" style="overflow: visible; height: 240px">
   
-      <!-- ko if: window.HAS_LINK_SHARING -->
-      <a href="javascript:void(0)" data-bind="visible: !definition().perms.link_sharing_on, click: function() { persistLinkSharingPerms('read'); }" title="${ I18n(
-        'Share the query via a link'
-      ) }">
-        <i class="fa fa-wf fa-link"></i> ${ I18n('Get link') }
-      </a>
-  
-      <!-- ko if: definition().perms.link_sharing_on -->
-      <a href="javascript:void(0)" data-bind="click: function() { persistLinkSharingPerms('off'); }" title="${ I18n(
-        'Deactivate the link sharing'
-      ) }">
-        <i class="fa fa-wf fa-link"></i> ${ I18n('Deactivate link') }
-      </a>
-  
-      <div class="row-fluid">
-        <div class="span12">
-          Anyone logged and with the link can:
-          <br/>
-          Read: <span data-bind="text: definition().perms.link_read"></span> |
-          Write: <span data-bind="text: definition().perms.link_write"></span>
-          <h4 class="muted" style="margin-top: 0">${ I18n('Shareable link') }</h4>
-          <div class="input-group">
-            <input class="input-xxlarge" onfocus="this.select()" name="gist-link" id="gist-link" type="text" placeholder="${ I18n('Link') }"/>
-          </div>
-          <div class="input-prepend">
-            <a class="btn gist-link-btn" data-clipboard-target="#gist-link" data-dismiss="modal">${ I18n('Copy')}</a>
-            <button class="add-on muted gist-link-btn" data-clipboard-target="#gist-link">
-              <i class="fa fa-clipboard"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-      <!-- /ko -->
-      <!-- /ko -->
-  
+    <!-- ko component: { name: 'link-sharing', params: { perms: perms, uuid: uuid } } --><!-- /ko -->
+    <!-- ko with: document -->
       <!-- ko with: definition -->
       <div class="row-fluid" data-bind="visible: !$parent.hasErrors()" style="max-height: 114px;" id="scrolldiv">
         <div class="span6">
@@ -163,17 +132,26 @@ const TEMPLATE = `
           </div>
         </div>
       </div>
+<!-- /ko -->
     </div>
     <div class="modal-footer">
       <a href="#" data-dismiss="modal" class="btn disable-feedback disable-enter">${ I18n('Close') }</a>
     </div>
-  <!-- /ko -->
 `;
 
-class ShareDocModal {
+class ShareDocModal extends DisposableComponent {
   constructor(params) {
+    super();
     this.document = ko.observable();
+    this.perms = ko.observable();
+    this.uuid = ko.observable();
+
     this.wasSharedBefore = undefined;
+
+    this.documentName = ko.pureComputed(() => this.document() && this.document().definition().name);
+    this.showLinkSharing = ko.pureComputed(
+      () => window.HAS_LINK_SHARING && this.perms() && this.perms().link_sharing_on
+    );
 
     this.initDocument(params);
   }
@@ -189,6 +167,8 @@ class ShareDocModal {
       const document = await getDocument(params);
       this.wasSharedBefore = document.isShared();
       this.document(document);
+      this.perms(document.definition().perms);
+      this.uuid(document.definition().uuid);
     } catch (err) {
       console.warn('Failed loading document.');
       console.error(err);
